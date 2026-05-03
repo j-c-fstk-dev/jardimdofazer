@@ -1,126 +1,135 @@
-const db = require('../database/db');
+import { getDatabase } from '../database/db.js';
 
-// Listar todos os pedidos
-function getAllOrders(callback) {
-  db.all('SELECT * FROM orders ORDER BY created_at DESC', [], (err, orders) => {
-    if (err) {
-      callback(err, null);
-      return;
-    }
+export const getOrders = (req, res) => {
+  try {
+    const db = getDatabase();
+    const orders = db.prepare(`
+      SELECT o.*, COUNT(oi.id) as item_count
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `).all();
 
-    if (!orders || orders.length === 0) {
-      callback(null, []);
-      return;
-    }
-
-    // Buscar itens para cada pedido
-    let processed = 0;
-    orders.forEach((order, index) => {
-      db.all(
-        `SELECT oi.*, p.name as product_name
-         FROM order_items oi
-         JOIN products p ON oi.product_id = p.id
-         WHERE oi.order_id = ?`,
-        [order.id],
-        (err, items) => {
-          orders[index].items = items || [];
-          processed++;
-          if (processed === orders.length) {
-            callback(null, orders);
-          }
-        }
-      );
+    res.status(200).json({
+      success: true,
+      data: orders,
+      count: orders.length
     });
-  });
-}
-
-// Obter pedido por ID
-function getOrderById(id, callback) {
-  db.get('SELECT * FROM orders WHERE id = ?', [id], (err, order) => {
-    if (err || !order) {
-      callback(err, null);
-      return;
-    }
-
-    db.all(
-      `SELECT oi.*, p.name as product_name
-       FROM order_items oi
-       JOIN products p ON oi.product_id = p.id
-       WHERE oi.order_id = ?`,
-      [id],
-      (err, items) => {
-        order.items = items || [];
-        callback(null, order);
-      }
-    );
-  });
-}
-
-// Criar pedido com itens
-function createOrder(data, callback) {
-  // Validação básica
-  if (!data.customer_name || !data.email || !data.items || data.items.length === 0) {
-    callback(new Error('Nome, email e itens são obrigatórios'), null);
-    return;
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
+};
 
-  // Calcular total
-  let total = 0;
-  data.items.forEach(item => {
-    total += item.price * item.quantity;
-  });
+export const getOrder = (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = getDatabase();
 
-  db.run(
-    `INSERT INTO orders (customer_name, email, phone, total_price, status)
-     VALUES (?, ?, ?, ?, ?)`,
-    [data.customer_name, data.email, data.phone || null, total, 'pending'],
-    function(err) {
-      if (err) {
-        callback(err, null);
-        return;
-      }
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
 
-      const orderId = this.lastID;
-      let inserted = 0;
-
-      // Inserir itens
-      data.items.forEach(item => {
-        db.run(
-          `INSERT INTO order_items (order_id, product_id, quantity, price)
-           VALUES (?, ?, ?, ?)`,
-          [orderId, item.product_id, item.quantity, item.price],
-          (err) => {
-            inserted++;
-            if (inserted === data.items.length) {
-              getOrderById(orderId, callback);
-            }
-          }
-        );
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pedido não encontrado'
       });
     }
-  );
-}
 
-// Atualizar status do pedido
-function updateOrderStatus(id, status, callback) {
-  const validStatuses = ['pending', 'paid', 'shipped', 'delivered'];
-  if (!validStatuses.includes(status)) {
-    callback(new Error('Status inválido'), null);
-    return;
+    const items = db.prepare(`
+      SELECT oi.*, p.name as product_name
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = ?
+    `).all(id);
+
+    order.items = items;
+
+    res.status(200).json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
+};
 
-  db.run('UPDATE orders SET status = ? WHERE id = ?', [status, id], function(err) {
-    if (err) {
-      callback(err, null);
-    } else {
-      getOrderById(id, callback);
+export const createOrder = (req, res) => {
+  try {
+    const { customer_name, email, phone, items, total_price } = req.body;
+
+    if (!customer_name || !email || !items || !total_price) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dados obrigatórios faltando'
+      });
     }
-  });
-}
 
-module.exports = {
-  getAllOrders,
-  getOrderById,
-  createOrder,
-  updateOrderStatus
+    const db = getDatabase();
+
+    const orderInsert = db.prepare(`
+      INSERT INTO orders (customer_name, email, phone, total_price)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    const orderResult = orderInsert.run(customer_name, email, phone, total_price);
+    const orderId = orderResult.lastInsertRowid;
+
+    const itemInsert = db.prepare(`
+      INSERT INTO order_items (order_id, product_id, quantity, price)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    items.forEach(item => {
+      itemInsert.run(orderId, item.product_id, item.quantity, item.price);
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Pedido criado com sucesso',
+      data: {
+        id: orderId,
+        customer_name,
+        email,
+        total_price
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+export const updateOrderStatus = (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status é obrigatório'
+      });
+    }
+
+    const db = getDatabase();
+    db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Status atualizado com sucesso'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
 };

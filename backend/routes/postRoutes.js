@@ -1,124 +1,21 @@
-const express = require('express');
+
+import express from 'express';
+
+import { getPosts, getPost, createPost, updatePost, deletePost } from '../controllers/postController.js';
+
+import { authMiddleware } from '../middlewares/authMiddleware.js';
+
 const router = express.Router();
-const postController = require('../controllers/postController');
 
-// GET - Listar todos os posts
-router.get('/', (req, res) => {
-  postController.getAllPosts((err, posts) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.get('/', getPosts);
 
-    res.json({
-      success: true,
-      data: posts,
-      count: posts.length
-    });
-  });
-});
+router.get('/:id', getPost);
 
-// GET - Obter post por ID
-router.get('/:id', (req, res) => {
-  postController.getPostById(req.params.id, (err, post) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.post('/', authMiddleware, createPost);
 
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        error: 'Post não encontrado'
-      });
-    }
+router.put('/:id', authMiddleware, updatePost);
 
-    res.json({
-      success: true,
-      data: post
-    });
-  });
-});
+router.delete('/:id', authMiddleware, deletePost);
 
-// GET - Obter post por slug
-router.get('/slug/:slug', (req, res) => {
-  postController.getPostBySlug(req.params.slug, (err, post) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+export default router;
 
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        error: 'Post não encontrado'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: post
-    });
-  });
-});
-
-// POST - Criar novo post
-router.post('/', (req, res) => {
-  postController.createPost(req.body, (err, post) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      data: post,
-      message: 'Post criado com sucesso'
-    });
-  });
-});
-
-// PUT - Atualizar post
-router.put('/:id', (req, res) => {
-  postController.updatePost(req.params.id, req.body, (err, post) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: post,
-      message: 'Post atualizado com sucesso'
-    });
-  });
-});
-
-// DELETE - Deletar post
-router.delete('/:id', (req, res) => {
-  postController.deletePost(req.params.id, (err, result) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result
-    });
-  });
-});
-
-module.exports = router;

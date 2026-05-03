@@ -1,100 +1,21 @@
-const express = require('express');
+
+import express from 'express';
+
+import { getProducts, getProduct, createProduct, updateProduct, deleteProduct } from '../controllers/productController.js';
+
+import { authMiddleware } from '../middlewares/authMiddleware.js';
+
 const router = express.Router();
-const productController = require('../controllers/productController');
 
-// GET - Listar todos os produtos
-router.get('/', (req, res) => {
-  productController.getAllProducts((err, products) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.get('/', getProducts);
 
-    res.json({
-      success: true,
-      data: products,
-      count: products.length
-    });
-  });
-});
+router.get('/:id', getProduct);
 
-// GET - Obter produto por ID
-router.get('/:id', (req, res) => {
-  productController.getProductById(req.params.id, (err, product) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.post('/', authMiddleware, createProduct);
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        error: 'Produto não encontrado'
-      });
-    }
+router.put('/:id', authMiddleware, updateProduct);
 
-    res.json({
-      success: true,
-      data: product
-    });
-  });
-});
+router.delete('/:id', authMiddleware, deleteProduct);
 
-// POST - Criar novo produto
-router.post('/', (req, res) => {
-  productController.createProduct(req.body, (err, product) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
+export default router;
 
-    res.status(201).json({
-      success: true,
-      data: product,
-      message: 'Produto criado com sucesso'
-    });
-  });
-});
-
-// PUT - Atualizar produto
-router.put('/:id', (req, res) => {
-  productController.updateProduct(req.params.id, req.body, (err, product) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: product,
-      message: 'Produto atualizado com sucesso'
-    });
-  });
-});
-
-// DELETE - Deletar produto
-router.delete('/:id', (req, res) => {
-  productController.deleteProduct(req.params.id, (err, result) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result
-    });
-  });
-});
-
-module.exports = router;

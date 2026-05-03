@@ -1,95 +1,142 @@
-const db = require('../database/db');
+import { getDatabase } from '../database/db.js';
 
-// Listar todos os produtos
-function getAllProducts(callback) {
-  db.all('SELECT * FROM products ORDER BY created_at DESC', [], (err, rows) => {
-    if (err) {
-      callback(err, null);
-    } else {
-      callback(null, rows || []);
+export const getProducts = (req, res) => {
+  try {
+    const db = getDatabase();
+    const products = db.prepare(`
+      SELECT p.*, 
+        GROUP_CONCAT(pi.image_url, ',') as images
+      FROM products p
+      LEFT JOIN product_images pi ON p.id = pi.product_id
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `).all();
+
+    const formattedProducts = products.map(p => ({
+      ...p,
+      images: p.images ? p.images.split(',') : []
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedProducts,
+      count: formattedProducts.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+export const getProduct = (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = getDatabase();
+    
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Produto não encontrado'
+      });
     }
-  });
-}
 
-// Obter produto por ID
-function getProductById(id, callback) {
-  db.get('SELECT * FROM products WHERE id = ?', [id], (err, product) => {
-    if (err || !product) {
-      callback(err, null);
-      return;
+    const images = db.prepare('SELECT image_url FROM product_images WHERE product_id = ? ORDER BY order_index').all(id);
+    product.images = images.map(i => i.image_url);
+
+    res.status(200).json({
+      success: true,
+      data: product
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+export const createProduct = (req, res) => {
+  try {
+    const { name, description, price, type, stock, production_time } = req.body;
+
+    if (!name || !price || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nome, preço e tipo são obrigatórios'
+      });
     }
 
-    // Buscar imagens do produto
-    db.all('SELECT * FROM product_images WHERE product_id = ? ORDER BY order_index', [id], (err, images) => {
-      product.images = images || [];
+    const db = getDatabase();
+    const insert = db.prepare(`
+      INSERT INTO products (name, description, price, type, stock, production_time)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
 
-      // Se é produto digital, buscar detalhes
-      if (product.type === 'digital') {
-        db.get('SELECT * FROM digital_products WHERE product_id = ?', [id], (err, digital) => {
-          product.digital = digital || null;
-          callback(null, product);
-        });
-      } else {
-        callback(null, product);
+    const result = insert.run(name, description, price, type, stock, production_time);
+
+    res.status(201).json({
+      success: true,
+      message: 'Produto criado com sucesso',
+      data: {
+        id: result.lastInsertRowid,
+        name,
+        price,
+        type
       }
     });
-  });
-}
-
-// Criar produto
-function createProduct(data, callback) {
-  // Validação básica
-  if (!data.name || !data.price || !data.type) {
-    callback(new Error('Nome, preço e tipo são obrigatórios'), null);
-    return;
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
+};
 
-  db.run(
-    `INSERT INTO products (name, description, price, type, stock, production_time)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [data.name, data.description || null, data.price, data.type, data.stock || null, data.production_time || null],
-    function(err) {
-      if (err) {
-        callback(err, null);
-      } else {
-        callback(null, { id: this.lastID, ...data });
-      }
-    }
-  );
-}
+export const updateProduct = (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price, type, stock, production_time } = req.body;
 
-// Atualizar produto
-function updateProduct(id, data, callback) {
-  db.run(
-    `UPDATE products
-     SET name = ?, description = ?, price = ?, type = ?, stock = ?, production_time = ?
-     WHERE id = ?`,
-    [data.name, data.description, data.price, data.type, data.stock, data.production_time, id],
-    function(err) {
-      if (err) {
-        callback(err, null);
-      } else {
-        getProductById(id, callback);
-      }
-    }
-  );
-}
+    const db = getDatabase();
+    const update = db.prepare(`
+      UPDATE products 
+      SET name = ?, description = ?, price = ?, type = ?, stock = ?, production_time = ?
+      WHERE id = ?
+    `);
 
-// Deletar produto
-function deleteProduct(id, callback) {
-  db.run('DELETE FROM products WHERE id = ?', [id], function(err) {
-    if (err) {
-      callback(err, null);
-    } else {
-      callback(null, { message: 'Produto deletado com sucesso' });
-    }
-  });
-}
+    update.run(name, description, price, type, stock, production_time, id);
 
-module.exports = {
-  getAllProducts,
-  getProductById,
-  createProduct,
-  updateProduct,
-  deleteProduct
+    res.status(200).json({
+      success: true,
+      message: 'Produto atualizado com sucesso'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+export const deleteProduct = (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = getDatabase();
+    
+    db.prepare('DELETE FROM products WHERE id = ?').run(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Produto deletado com sucesso'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
 };

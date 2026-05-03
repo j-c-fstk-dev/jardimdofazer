@@ -1,92 +1,19 @@
-const express = require('express');
+
+import express from 'express';
+
+import { getOrders, getOrder, createOrder, updateOrderStatus } from '../controllers/orderController.js';
+
+import { authMiddleware } from '../middlewares/authMiddleware.js';
+
 const router = express.Router();
-const orderController = require('../controllers/orderController');
 
-// GET - Listar todos os pedidos
-router.get('/', (req, res) => {
-  orderController.getAllOrders((err, orders) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.get('/', authMiddleware, getOrders);
 
-    res.json({
-      success: true,
-      data: orders,
-      count: orders.length
-    });
-  });
-});
+router.get('/:id', authMiddleware, getOrder);
 
-// GET - Obter pedido por ID
-router.get('/:id', (req, res) => {
-  orderController.getOrderById(req.params.id, (err, order) => {
-    if (err) {
-      return res.status(500).json({
-        success: false,
-        error: err.message
-      });
-    }
+router.post('/', createOrder);
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: 'Pedido não encontrado'
-      });
-    }
+router.put('/:id', authMiddleware, updateOrderStatus);
 
-    res.json({
-      success: true,
-      data: order
-    });
-  });
-});
+export default router;
 
-// POST - Criar novo pedido
-router.post('/', (req, res) => {
-  orderController.createOrder(req.body, (err, order) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      data: order,
-      message: 'Pedido criado com sucesso'
-    });
-  });
-});
-
-// PUT - Atualizar status do pedido
-router.put('/:id/status', (req, res) => {
-  const { status } = req.body;
-  
-  if (!status) {
-    return res.status(400).json({
-      success: false,
-      error: 'Status é obrigatório'
-    });
-  }
-
-  orderController.updateOrderStatus(req.params.id, status, (err, order) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: order,
-      message: 'Status atualizado com sucesso'
-    });
-  });
-});
-
-module.exports = router;

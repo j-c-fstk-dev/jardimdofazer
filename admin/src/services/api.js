@@ -1,17 +1,51 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://localhost:3000';
 
-// ============ PRODUCTS ============
+const getToken = () => localStorage.getItem('auth_token');
+
+const getAuthHeaders = () => {
+  const token = getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+export const authService = {
+  login: async (email, password) => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) throw new Error('Erro ao fazer login');
+    const data = await response.json();
+    if (data.data.token) {
+      localStorage.setItem('auth_token', data.data.token);
+    }
+    return data.data;
+  },
+
+  logout: () => {
+    localStorage.removeItem('auth_token');
+  },
+
+  getToken: () => getToken(),
+};
 
 export const productService = {
   getAll: async () => {
-    const response = await fetch(`${API_URL}/products`);
+    const response = await fetch(`${API_URL}/products`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao buscar produtos');
     const data = await response.json();
     return data.data || [];
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_URL}/products/${id}`);
+    const response = await fetch(`${API_URL}/products/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Produto não encontrado');
     const data = await response.json();
     return data.data;
@@ -20,7 +54,7 @@ export const productService = {
   create: async (product) => {
     const response = await fetch(`${API_URL}/products`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(product),
     });
     if (!response.ok) throw new Error('Erro ao criar produto');
@@ -31,7 +65,7 @@ export const productService = {
   update: async (id, product) => {
     const response = await fetch(`${API_URL}/products/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(product),
     });
     if (!response.ok) throw new Error('Erro ao atualizar produto');
@@ -42,24 +76,27 @@ export const productService = {
   delete: async (id) => {
     const response = await fetch(`${API_URL}/products/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Erro ao deletar produto');
-    return await response.json();
+    return true;
   },
 };
 
-// ============ ORDERS ============
-
 export const orderService = {
   getAll: async () => {
-    const response = await fetch(`${API_URL}/orders`);
+    const response = await fetch(`${API_URL}/orders`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao buscar pedidos');
     const data = await response.json();
     return data.data || [];
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_URL}/orders/${id}`);
+    const response = await fetch(`${API_URL}/orders/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Pedido não encontrado');
     const data = await response.json();
     return data.data;
@@ -68,7 +105,7 @@ export const orderService = {
   create: async (order) => {
     const response = await fetch(`${API_URL}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(order),
     });
     if (!response.ok) throw new Error('Erro ao criar pedido');
@@ -77,9 +114,9 @@ export const orderService = {
   },
 
   updateStatus: async (id, status) => {
-    const response = await fetch(`${API_URL}/orders/${id}/status`, {
+    const response = await fetch(`${API_URL}/orders/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ status }),
     });
     if (!response.ok) throw new Error('Erro ao atualizar pedido');
@@ -88,18 +125,20 @@ export const orderService = {
   },
 };
 
-// ============ POSTS ============
-
 export const postService = {
   getAll: async () => {
-    const response = await fetch(`${API_URL}/posts`);
+    const response = await fetch(`${API_URL}/posts`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao buscar posts');
     const data = await response.json();
     return data.data || [];
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_URL}/posts/${id}`);
+    const response = await fetch(`${API_URL}/posts/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Post não encontrado');
     const data = await response.json();
     return data.data;
@@ -108,7 +147,7 @@ export const postService = {
   create: async (post) => {
     const response = await fetch(`${API_URL}/posts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(post),
     });
     if (!response.ok) throw new Error('Erro ao criar post');
@@ -119,7 +158,7 @@ export const postService = {
   update: async (id, post) => {
     const response = await fetch(`${API_URL}/posts/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(post),
     });
     if (!response.ok) throw new Error('Erro ao atualizar post');
@@ -130,8 +169,9 @@ export const postService = {
   delete: async (id) => {
     const response = await fetch(`${API_URL}/posts/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Erro ao deletar post');
-    return await response.json();
+    return true;
   },
 };
